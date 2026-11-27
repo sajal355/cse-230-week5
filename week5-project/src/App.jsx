@@ -9,74 +9,92 @@ import {
 } from "./utils/wordlelogic";
 import "./index.css";
 
-function App() {
-  const [solutionWord, setSolutionWord] = useState(() => getRandomWord());
-  const [currentGuess, setCurrentGuess] = useState("");
-  const [pastGuesses, setPastGuesses] = useState([]);
-  const [gameStatus, setGameStatus] = useState("IN_PROGRESS");
-  const [bannerMessage, setBannerMessage] = useState("");
+const ACTIVE_STATE = "IN_PROGRESS";
+const WIN_STATE = "WON";
+const LOSS_STATE = "LOST";
 
-  const keyStatuses = useMemo(
-    () => getKeyboardStatuses(pastGuesses, solutionWord),
-    [pastGuesses, solutionWord]
+function App() {
+  const [targetWord, setTargetWord] = useState(() => getRandomWord());
+  const [activeInput, setActiveInput] = useState("");
+  const [attemptHistory, setAttemptHistory] = useState([]);
+  const [roundStatus, setRoundStatus] = useState(ACTIVE_STATE);
+  const [alertText, setAlertText] = useState("");
+
+  const letterMap = useMemo(
+    () => getKeyboardStatuses(attemptHistory, targetWord),
+    [attemptHistory, targetWord]
   );
 
-  const handleKeyPress = useCallback(
-    (rawKey) => {
-      if (gameStatus !== "IN_PROGRESS") return;
+  const submitCurrentAttempt = useCallback(() => {
+    if (activeInput.length < WORD_LENGTH) {
+      setAlertText(`Type all ${WORD_LENGTH} letters before pressing Enter.`);
+      return;
+    }
 
-      const key = rawKey.toUpperCase();
-      setBannerMessage("");
+    const updatedHistory = [...attemptHistory, activeInput];
+    setAttemptHistory(updatedHistory);
+    setActiveInput("");
 
-      if (key === "BACKSPACE" || key === "DELETE") {
-        setCurrentGuess((prev) => prev.slice(0, -1));
+    if (activeInput === targetWord) {
+      setRoundStatus(WIN_STATE);
+    } else if (updatedHistory.length >= MAX_GUESSES) {
+      setRoundStatus(LOSS_STATE);
+    }
+  }, [activeInput, attemptHistory, targetWord]);
+
+  const processKeyInput = useCallback(
+    (rawInput) => {
+      if (roundStatus !== ACTIVE_STATE) return;
+
+      const normalizedKey = rawInput.toUpperCase();
+      setAlertText("");
+
+      if (normalizedKey === "BACKSPACE" || normalizedKey === "DELETE") {
+        setActiveInput((prevText) => prevText.slice(0, -1));
         return;
       }
 
-      if (key === "ENTER") {
-        if (currentGuess.length < WORD_LENGTH) {
-          setBannerMessage(`Enter ${WORD_LENGTH} letters first.`);
-          return;
-        }
-
-        const nextGuesses = [...pastGuesses, currentGuess];
-        setPastGuesses(nextGuesses);
-        setCurrentGuess("");
-
-        if (currentGuess === solutionWord) {
-          setGameStatus("WON");
-        } else if (nextGuesses.length >= MAX_GUESSES) {
-          setGameStatus("LOST");
-        }
+      if (normalizedKey === "ENTER") {
+        submitCurrentAttempt();
         return;
       }
 
-      if (/^[A-Z]$/.test(key) && currentGuess.length < WORD_LENGTH) {
-        setCurrentGuess((prev) => prev + key);
+      const isSingleLetter = /^[A-Z]$/.test(normalizedKey);
+      if (isSingleLetter && activeInput.length < WORD_LENGTH) {
+        setActiveInput((prevText) => `${prevText}${normalizedKey}`);
       }
     },
-    [currentGuess, gameStatus, pastGuesses, solutionWord]
+    [activeInput.length, roundStatus, submitCurrentAttempt]
   );
 
   useEffect(() => {
-    const onKeyDown = (event) => {
+    const handlePhysicalKey = (event) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key === "Enter" || event.key === "Backspace" || /^[a-zA-Z]$/.test(event.key)) {
-        handleKeyPress(event.key);
+      const pressed = event.key;
+      const validKey =
+        pressed === "Enter" ||
+        pressed === "Backspace" ||
+        /^[a-zA-Z]$/.test(pressed);
+
+      if (validKey) {
+        processKeyInput(pressed);
       }
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleKeyPress]);
+    window.addEventListener("keydown", handlePhysicalKey);
+    return () => window.removeEventListener("keydown", handlePhysicalKey);
+  }, [processKeyInput]);
 
-  const handleRestart = () => {
-    setSolutionWord(getRandomWord());
-    setCurrentGuess("");
-    setPastGuesses([]);
-    setGameStatus("IN_PROGRESS");
-    setBannerMessage("");
+  const startNewRound = () => {
+    setTargetWord(getRandomWord());
+    setActiveInput("");
+    setAttemptHistory([]);
+    setRoundStatus(ACTIVE_STATE);
+    setAlertText("");
   };
+
+  const isGameOver = roundStatus !== ACTIVE_STATE;
+  const attemptsCount = attemptHistory.length;
 
   return (
     <div className="app-container">
@@ -84,37 +102,37 @@ function App() {
         <h1>Wordle Clone</h1>
       </header>
 
-      {bannerMessage && (
+      {alertText && (
         <div className="message-banner" role="status">
-          {bannerMessage}
+          {alertText}
         </div>
       )}
 
       <GameBoard
-        pastGuesses={pastGuesses}
-        currentGuess={currentGuess}
-        solutionWord={solutionWord}
-        gameStatus={gameStatus}
+        pastGuesses={attemptHistory}
+        currentGuess={activeInput}
+        solutionWord={targetWord}
+        gameStatus={roundStatus}
       />
 
       <Keyboard
-        onKeyPress={handleKeyPress}
-        keyStatuses={keyStatuses}
-        disabled={gameStatus !== "IN_PROGRESS"}
+        onKeyPress={processKeyInput}
+        keyStatuses={letterMap}
+        disabled={isGameOver}
       />
 
-      {gameStatus !== "IN_PROGRESS" && (
+      {isGameOver && (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal-card">
-            <h2>{gameStatus === "WON" ? "You Won!" : "Game Over"}</h2>
+            <h2>{roundStatus === WIN_STATE ? "You Won!" : "Game Over"}</h2>
             <p>
-              {gameStatus === "WON"
-                ? `Solved in ${pastGuesses.length} ${
-                    pastGuesses.length === 1 ? "try" : "tries"
+              {roundStatus === WIN_STATE
+                ? `You solved it in ${attemptsCount} ${
+                    attemptsCount === 1 ? "guess" : "guesses"
                   }.`
-                : `The target word was ${solutionWord}.`}
+                : `The hidden word was ${targetWord}.`}
             </p>
-            <button type="button" className="restart-btn" onClick={handleRestart}>
+            <button type="button" className="restart-btn" onClick={startNewRound}>
               Play Again
             </button>
           </div>

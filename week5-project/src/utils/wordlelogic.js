@@ -1,51 +1,47 @@
 export const WORD_LIST = [
   "APPLE", "BRAVE", "CRANE", "DRIFT", "EAGLE",
-  "FLAME", "GRAPE", "HEART", "IVORY", "JOKER",
-  "KNIFE", "LEMON", "MANGO", "NIGHT", "OLIVE",
-  "PEARL", "QUEST", "RIVER", "STONE", "TIGER",
-  "UNITY", "VIVID", "WHALE", "XENON", "YACHT",
-  "ZEBRA"
+  "CRISP", "FROST", "GLINT", "HAVEN", "JUMBO",
+  "KNEEL", "LUNAR", "MIRTH", "NOBLE", "ORBIT",
+  "PLUMB", "QUILT", "ROAST", "SHELF", "TREND",
+  "ULCER", "VAULT", "WOVEN", "XERIC", "YIELD",
+  "ZESTY", "BLAZE", "CHORD", "DWELL", "SOLAR"
 ];
 
 export const MAX_GUESSES = 6;
 export const WORD_LENGTH = 5;
 
 export function getRandomWord() {
-  const index = Math.floor(Math.random() * WORD_LIST.length);
-  return WORD_LIST[index];
+  const randomIdx = Math.floor(Math.random() * WORD_LIST.length);
+  return WORD_LIST[randomIdx];
 }
 
-/**
- * Evaluates a 5-letter guess against the target solution word.
- * Returns an array of statuses: 'correct' (green), 'present' (yellow), or 'absent' (gray).
- */
 export function evaluateGuess(guess, solution) {
-  const upperGuess = guess.toUpperCase();
-  const upperSolution = solution.toUpperCase();
-  const result = Array(WORD_LENGTH).fill("absent");
-  const remainingCounts = {};
+  const guessUpper = guess.toUpperCase();
+  const solutionUpper = solution.toUpperCase();
+  const outcome = Array(WORD_LENGTH).fill("absent");
+  const poolCounts = {};
 
-  // Pass 1: Mark exact positional matches ('correct') and count remaining letters
-  for (let i = 0; i < WORD_LENGTH; i++) {
-    const solChar = upperSolution[i];
-    if (upperGuess[i] === solChar) {
-      result[i] = "correct";
+  // First pass: mark exact slot matches
+  for (let idx = 0; idx < WORD_LENGTH; idx++) {
+    const targetChar = solutionUpper[idx];
+    if (guessUpper[idx] === targetChar) {
+      outcome[idx] = "correct";
     } else {
-      remainingCounts[solChar] = (remainingCounts[solChar] || 0) + 1;
+      poolCounts[targetChar] = (poolCounts[targetChar] || 0) + 1;
     }
   }
 
-  // Pass 2: Mark misplaced letters ('present') if unused occurrences remain
-  for (let i = 0; i < WORD_LENGTH; i++) {
-    if (result[i] === "correct") continue;
-    const guessChar = upperGuess[i];
-    if (remainingCounts[guessChar] > 0) {
-      result[i] = "present";
-      remainingCounts[guessChar] -= 1;
+  // Second pass: mark right letter in a different slot
+  for (let idx = 0; idx < WORD_LENGTH; idx++) {
+    if (outcome[idx] === "correct") continue;
+    const ch = guessUpper[idx];
+    if (poolCounts[ch] > 0) {
+      outcome[idx] = "present";
+      poolCounts[ch] -= 1;
     }
   }
 
-  return result;
+  return outcome;
 }
 
 const STATUS_PRIORITY = {
@@ -54,28 +50,21 @@ const STATUS_PRIORITY = {
   absent: 1,
 };
 
-/**
- * Builds a map of { [letter]: highestStatus } across all submitted guesses
- * so the virtual keyboard reflects the strongest feedback per letter.
- */
 export function getKeyboardStatuses(pastGuesses, solution) {
-  const keyMap = {};
+  const statusByKey = {};
 
-  for (const guess of pastGuesses) {
-    const evaluations = evaluateGuess(guess, solution);
-    for (let i = 0; i < guess.length; i++) {
-      const letter = guess[i].toUpperCase();
-      const nextStatus = evaluations[i];
-      const currentStatus = keyMap[letter];
+  for (const attempt of pastGuesses) {
+    const rowScores = evaluateGuess(attempt, solution);
+    for (let idx = 0; idx < attempt.length; idx++) {
+      const ch = attempt[idx].toUpperCase();
+      const candidate = rowScores[idx];
+      const current = statusByKey[ch];
 
-      if (
-        !currentStatus ||
-        STATUS_PRIORITY[nextStatus] > STATUS_PRIORITY[currentStatus]
-      ) {
-        keyMap[letter] = nextStatus;
+      if (!current || STATUS_PRIORITY[candidate] > STATUS_PRIORITY[current]) {
+        statusByKey[ch] = candidate;
       }
     }
   }
 
-  return keyMap;
+  return statusByKey;
 }

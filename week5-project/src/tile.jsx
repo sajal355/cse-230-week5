@@ -1,11 +1,22 @@
+function buildTileClassList(charValue, tileState) {
+  const classes = ["tile"];
+  if (charValue.trim().length > 0) {
+    classes.push("filled");
+  }
+  if (tileState) {
+    classes.push(tileState);
+  }
+  return classes.join(" ");
+}
+
 function Tile({ letter = "", status = "" }) {
-  const classNames = ["tile"];
-  if (letter) classNames.push("filled");
-  if (status) classNames.push(status);
+  const displayChar = letter || "";
+  const tileClasses = buildTileClassList(displayChar, status);
+  const accessibleName = displayChar ? displayChar : "empty";
 
   return (
-    <div className={classNames.join(" ")} aria-label={letter || "empty"}>
-      {letter}
+    <div className={tileClasses} aria-label={accessibleName}>
+      {displayChar}
     </div>
   );
 }
